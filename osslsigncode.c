@@ -450,7 +450,8 @@ static SpcSpOpusInfo* createOpus(const char *desc, const char *url)
 	if (desc) {
 		info->programName = SpcString_new();
 		info->programName->type = 1;
-		info->programName->value.ascii = M_ASN1_IA5STRING_new();
+		//info->programName->value.ascii = M_ASN1_IA5STRING_new();
+		info->programName->value.ascii = ASN1_IA5STRING_new();
 		ASN1_STRING_set((ASN1_STRING *)info->programName->value.ascii,
 						(const unsigned char*)desc, strlen(desc));
 	}
@@ -458,7 +459,8 @@ static SpcSpOpusInfo* createOpus(const char *desc, const char *url)
 	if (url) {
 		info->moreInfo = SpcLink_new();
 		info->moreInfo->type = 0;
-		info->moreInfo->value.url = M_ASN1_IA5STRING_new();
+		//info->moreInfo->value.url = M_ASN1_IA5STRING_new();
+		info->moreInfo->value.url = ASN1_IA5STRING_new();
 		ASN1_STRING_set((ASN1_STRING *)info->moreInfo->value.url,
 						(const unsigned char*)url, strlen(url));
 	}
