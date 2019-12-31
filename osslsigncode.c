@@ -450,8 +450,11 @@ static SpcSpOpusInfo* createOpus(const char *desc, const char *url)
 	if (desc) {
 		info->programName = SpcString_new();
 		info->programName->type = 1;
-		//info->programName->value.ascii = M_ASN1_IA5STRING_new();
+#if OPENSSL_VERSION_NUMBER < 0x10100000		
+		info->programName->value.ascii = M_ASN1_IA5STRING_new();
+#else
 		info->programName->value.ascii = ASN1_IA5STRING_new();
+#endif
 		ASN1_STRING_set((ASN1_STRING *)info->programName->value.ascii,
 						(const unsigned char*)desc, strlen(desc));
 	}
@@ -459,8 +462,11 @@ static SpcSpOpusInfo* createOpus(const char *desc, const char *url)
 	if (url) {
 		info->moreInfo = SpcLink_new();
 		info->moreInfo->type = 0;
-		//info->moreInfo->value.url = M_ASN1_IA5STRING_new();
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+		info->moreInfo->value.url = M_ASN1_IA5STRING_new();
+#else
 		info->moreInfo->value.url = ASN1_IA5STRING_new();
+#endif
 		ASN1_STRING_set((ASN1_STRING *)info->moreInfo->value.url,
 						(const unsigned char*)url, strlen(url));
 	}
@@ -611,19 +617,27 @@ static int add_timestamp(PKCS7 *sig, char *url, char *proxy, int rfc3161, const 
 
 	if (rfc3161) {
 		unsigned char mdbuf[EVP_MAX_MD_SIZE];
-		EVP_MD_CTX mdctx;
+		EVP_MD_CTX *mdctx=NULL;
 
-		EVP_MD_CTX_init(&mdctx);
-		EVP_DigestInit(&mdctx, md);
-		EVP_DigestUpdate(&mdctx, si->enc_digest->data, si->enc_digest->length);
-		EVP_DigestFinal(&mdctx, mdbuf, NULL);
+		mdctx = EVP_MD_CTX_new();
+		if (mdctx) {
+			EVP_DigestInit(mdctx, md);
+			EVP_DigestUpdate(mdctx, si->enc_digest->data, si->enc_digest->length);
+			EVP_DigestFinal(mdctx, mdbuf, NULL);
+			EVP_MD_CTX_free(mdctx);
+			mdctx = NULL;
+		}
 
 		TimeStampReq *req = TimeStampReq_new();
 		ASN1_INTEGER_set(req->version, 1);
 		req->messageImprint->digestAlgorithm->algorithm = OBJ_nid2obj(EVP_MD_nid(md));
 		req->messageImprint->digestAlgorithm->parameters = ASN1_TYPE_new();
 		req->messageImprint->digestAlgorithm->parameters->type = V_ASN1_NULL;
+#if OPENSSL_VERSION_NUMBER < 0x10100000
 		M_ASN1_OCTET_STRING_set(req->messageImprint->digest, mdbuf, EVP_MD_size(md));
+#else
+		ASN1_OCTET_STRING_set(req->messageImprint->digest, mdbuf, EVP_MD_size(md));
+#endif
 		req->certReq = (void*)0x1;
 
 		len = i2d_TimeStampReq(req, NULL);
@@ -817,7 +831,7 @@ static void cleanup_lib_state(void)
     EVP_cleanup();
 	CONF_modules_free();
     CRYPTO_cleanup_all_ex_data();
-#if OPENSSL_VERSION_NUMBER > 0x10000000
+#if OPENSSL_VERSION_NUMBER > 0x10000000 && OPENSSL_VERSION_NUMBER < 0x10100000
 	ERR_remove_thread_state(NULL);
 #endif
     ERR_free_strings();
@@ -923,10 +937,13 @@ static const unsigned char classid_page_hash[] = {
 	0xAE, 0x05, 0xA2, 0x17, 0xDA, 0x8E, 0x60, 0xD6
 };
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000
 static unsigned char *calc_page_hash(char *indata, unsigned int peheader, int pe32plus,
 									 unsigned int sigpos, int phtype, unsigned int *phlen);
 
 DECLARE_STACK_OF(ASN1_OCTET_STRING)
+
+
 #ifndef sk_ASN1_OCTET_STRING_new_null
 #define sk_ASN1_OCTET_STRING_new_null() SKM_sk_new_null(ASN1_OCTET_STRING)
 #define sk_ASN1_OCTET_STRING_free(st) SKM_sk_free(ASN1_OCTET_STRING, (st))
@@ -997,9 +1014,14 @@ static SpcLink *get_page_hash_link(int phtype, char *indata, unsigned int pehead
 	link->value.moniker = so;
 	return link;
 }
+#endif /*OPENSSL_VERSION_NUMBER < 0x10100000*/
 
 static void get_indirect_data_blob(u_char **blob, int *len, const EVP_MD *md, file_type_t type,
+#if OPENSSL_VERSION_NUMBER < 0x10100000	
 								   int pagehash, char *indata, unsigned int peheader, int pe32plus,
+#else
+								    char *indata, unsigned int peheader, int pe32plus,
+#endif
 								   unsigned int sigpos)
 {
 	static const unsigned char msistr[] = {
@@ -1026,6 +1048,7 @@ static void get_indirect_data_blob(u_char **blob, int *len, const EVP_MD *md, fi
 	} else if (type == FILE_TYPE_PE) {
 		SpcPeImageData *pid = SpcPeImageData_new();
 		ASN1_BIT_STRING_set(pid->flags, (unsigned char*)"0", 0);
+#if OPENSSL_VERSION_NUMBER < 0x10100000		
 		if (pagehash) {
 			int phtype = NID_sha1;
 			if (EVP_MD_size(md) > EVP_MD_size(EVP_sha1()))
@@ -1034,6 +1057,9 @@ static void get_indirect_data_blob(u_char **blob, int *len, const EVP_MD *md, fi
 		} else {
 			pid->file = get_obsolete_link();
 		}
+#else
+		pid->file = get_obsolete_link();
+#endif
 		l = i2d_SpcPeImageData(pid, NULL);
 		p = OPENSSL_malloc(l);
 		i2d_SpcPeImageData(pid, &p);
@@ -1048,7 +1074,11 @@ static void get_indirect_data_blob(u_char **blob, int *len, const EVP_MD *md, fi
 		ASN1_INTEGER_set(si->d, 0);
 		ASN1_INTEGER_set(si->e, 0);
 		ASN1_INTEGER_set(si->f, 0);
+#if OPENSSL_VERSION_NUMBER < 0x10100000		
 		M_ASN1_OCTET_STRING_set(si->string, msistr, sizeof(msistr));
+#else
+		ASN1_OCTET_STRING_set(si->string, msistr, sizeof(msistr));
+#endif
 		l = i2d_SpcSipInfo(si, NULL);
 		p = OPENSSL_malloc(l);
 		i2d_SpcSipInfo(si, &p);
@@ -1070,7 +1100,11 @@ static void get_indirect_data_blob(u_char **blob, int *len, const EVP_MD *md, fi
 	hashlen = EVP_MD_size(md);
 	hash = OPENSSL_malloc(hashlen);
 	memset(hash, 0, hashlen);
+#if OPENSSL_VERSION_NUMBER < 0x10100000
 	M_ASN1_OCTET_STRING_set(idc->messageDigest->digest, hash, hashlen);
+#else
+	ASN1_OCTET_STRING_set(idc->messageDigest->digest, hash, hashlen);
+#endif
 	OPENSSL_free(hash);
 
 	*len  = i2d_SpcIndirectDataContent(idc, NULL);
@@ -1925,19 +1959,23 @@ static void calc_pe_digest(BIO *bio, const EVP_MD *md, unsigned char *mdbuf,
 						   unsigned int peheader, int pe32plus, unsigned int fileend)
 {
 	static unsigned char bfb[16*1024*1024];
-	EVP_MD_CTX mdctx;
+	EVP_MD_CTX *mdctx=NULL;
 
-	EVP_MD_CTX_init(&mdctx);
-	EVP_DigestInit(&mdctx, md);
+	mdctx = EVP_MD_CTX_new();
+	if (mdctx == NULL) {
+		return;
+	}
+
+	EVP_DigestInit(mdctx, md);
 
 	memset(mdbuf, 0, EVP_MAX_MD_SIZE);
 
 	(void)BIO_seek(bio, 0);
 	BIO_read(bio, bfb, peheader + 88);
-	EVP_DigestUpdate(&mdctx, bfb, peheader + 88);
+	EVP_DigestUpdate(mdctx, bfb, peheader + 88);
 	BIO_read(bio, bfb, 4);
 	BIO_read(bio, bfb, 60+pe32plus*16);
-	EVP_DigestUpdate(&mdctx, bfb, 60+pe32plus*16);
+	EVP_DigestUpdate(mdctx, bfb, 60+pe32plus*16);
 	BIO_read(bio, bfb, 8);
 
 	unsigned int n = peheader + 88 + 4 + 60+pe32plus*16 + 8;
@@ -1948,11 +1986,12 @@ static void calc_pe_digest(BIO *bio, const EVP_MD *md, unsigned char *mdbuf,
 		int l = BIO_read(bio, bfb, want);
 		if (l <= 0)
 			break;
-		EVP_DigestUpdate(&mdctx, bfb, l);
+		EVP_DigestUpdate(mdctx, bfb, l);
 		n += l;
 	}
 
-	EVP_DigestFinal(&mdctx, mdbuf, NULL);
+	EVP_DigestFinal(mdctx, mdbuf, NULL);
+	EVP_MD_CTX_free(mdctx);
 }
 
 
@@ -2021,16 +2060,19 @@ static unsigned char *calc_page_hash(char *indata, unsigned int peheader, int pe
 	int phlen = pphlen * (3 + nsections + sigpos / pagesize);
 	unsigned char *res = malloc(phlen);
 	unsigned char *zeroes = calloc(pagesize, 1);
-	EVP_MD_CTX mdctx;
+	EVP_MD_CTX *mdctx=NULL;
 
-	EVP_MD_CTX_init(&mdctx);
-	EVP_DigestInit(&mdctx, md);
-	EVP_DigestUpdate(&mdctx, indata, peheader + 88);
-	EVP_DigestUpdate(&mdctx, indata + peheader + 92, 60 + pe32plus*16);
-	EVP_DigestUpdate(&mdctx, indata + peheader + 160 + pe32plus*16, hdrsize - (peheader + 160 + pe32plus*16));
-	EVP_DigestUpdate(&mdctx, zeroes, pagesize - hdrsize);
+	mdctx = EVP_MD_CTX_new();
+	if (mdctx == NULL) {
+		return NULL;
+	}
+	EVP_DigestInit(mdctx, md);
+	EVP_DigestUpdate(mdctx, indata, peheader + 88);
+	EVP_DigestUpdate(mdctx, indata + peheader + 92, 60 + pe32plus*16);
+	EVP_DigestUpdate(mdctx, indata + peheader + 160 + pe32plus*16, hdrsize - (peheader + 160 + pe32plus*16));
+	EVP_DigestUpdate(mdctx, zeroes, pagesize - hdrsize);
 	memset(res, 0, 4);
-	EVP_DigestFinal(&mdctx, res + 4, NULL);
+	EVP_DigestFinal(mdctx, res + 4, NULL);
 
 	unsigned short sizeofopthdr = GET_UINT16_LE(indata + peheader + 20);
 	char *sections = indata + peheader + 24 + sizeofopthdr;
@@ -2042,14 +2084,14 @@ static unsigned char *calc_page_hash(char *indata, unsigned int peheader, int pe
 		unsigned int l;
 		for (l=0; l < rs; l+=pagesize, pi++) {
 			PUT_UINT32_LE(ro + l, res + pi*pphlen);
-			EVP_DigestInit(&mdctx, md);
+			EVP_DigestInit(mdctx, md);
 			if (rs - l < pagesize) {
-				EVP_DigestUpdate(&mdctx, indata + ro + l, rs - l);
-				EVP_DigestUpdate(&mdctx, zeroes, pagesize - (rs - l));
+				EVP_DigestUpdate(mdctx, indata + ro + l, rs - l);
+				EVP_DigestUpdate(mdctx, zeroes, pagesize - (rs - l));
 			} else {
-				EVP_DigestUpdate(&mdctx, indata + ro + l, pagesize);
+				EVP_DigestUpdate(mdctx, indata + ro + l, pagesize);
 			}
-			EVP_DigestFinal(&mdctx, res + pi*pphlen + 4, NULL);
+			EVP_DigestFinal(mdctx, res + pi*pphlen + 4, NULL);
 		}
 		lastpos = ro + rs;
 		sections += 40;
@@ -2059,6 +2101,8 @@ static unsigned char *calc_page_hash(char *indata, unsigned int peheader, int pe
 	pi++;
 	free(zeroes);
 	*rphlen = pi*pphlen;
+	EVP_MD_CTX_free(mdctx);
+	mdctx = NULL;
 	return res;
 }
 
@@ -3245,7 +3289,11 @@ int main(int argc, char **argv)
 		p7x = NULL;
 	}
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000
 	get_indirect_data_blob(&p, &len, md, type, pagehash, indata, peheader, pe32plus, fileend);
+#else
+	get_indirect_data_blob(&p, &len, md, type, indata, peheader, pe32plus, fileend);
+#endif
 	len -= EVP_MD_size(md);
 	memcpy(buf, p, len);
 	OPENSSL_free(p);
