@@ -617,8 +617,14 @@ static int add_timestamp(PKCS7 *sig, char *url, char *proxy, int rfc3161, const 
 
 	if (rfc3161) {
 		unsigned char mdbuf[EVP_MAX_MD_SIZE];
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+		EVP_MD_CTX mdctx;
+		EVP_MD_CTX_init(&mdctx);
+		EVP_DigestInit(&mdctx, md);
+		EVP_DigestUpdate(&mdctx, si->enc_digest->data, si->enc_digest->length);
+		EVP_DigestFinal(&mdctx, mdbuf, NULL);
+#else		
 		EVP_MD_CTX *mdctx=NULL;
-
 		mdctx = EVP_MD_CTX_new();
 		if (mdctx) {
 			EVP_DigestInit(mdctx, md);
@@ -627,7 +633,7 @@ static int add_timestamp(PKCS7 *sig, char *url, char *proxy, int rfc3161, const 
 			EVP_MD_CTX_free(mdctx);
 			mdctx = NULL;
 		}
-
+#endif
 		TimeStampReq *req = TimeStampReq_new();
 		ASN1_INTEGER_set(req->version, 1);
 		req->messageImprint->digestAlgorithm->algorithm = OBJ_nid2obj(EVP_MD_nid(md));
@@ -1959,6 +1965,36 @@ static void calc_pe_digest(BIO *bio, const EVP_MD *md, unsigned char *mdbuf,
 						   unsigned int peheader, int pe32plus, unsigned int fileend)
 {
 	static unsigned char bfb[16*1024*1024];
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+	EVP_MD_CTX mdctx;
+
+	EVP_MD_CTX_init(&mdctx);
+	EVP_DigestInit(&mdctx, md);
+
+	memset(mdbuf, 0, EVP_MAX_MD_SIZE);
+
+	(void)BIO_seek(bio, 0);
+	BIO_read(bio, bfb, peheader + 88);
+	EVP_DigestUpdate(&mdctx, bfb, peheader + 88);
+	BIO_read(bio, bfb, 4);
+	BIO_read(bio, bfb, 60+pe32plus*16);
+	EVP_DigestUpdate(&mdctx, bfb, 60+pe32plus*16);
+	BIO_read(bio, bfb, 8);
+
+	unsigned int n = peheader + 88 + 4 + 60+pe32plus*16 + 8;
+	while (n < fileend) {
+		int want = fileend - n;
+		if (want > sizeof(bfb))
+			want = sizeof(bfb);
+		int l = BIO_read(bio, bfb, want);
+		if (l <= 0)
+			break;
+		EVP_DigestUpdate(&mdctx, bfb, l);
+		n += l;
+	}
+
+	EVP_DigestFinal(&mdctx, mdbuf, NULL);
+#else	
 	EVP_MD_CTX *mdctx=NULL;
 
 	mdctx = EVP_MD_CTX_new();
@@ -1992,6 +2028,8 @@ static void calc_pe_digest(BIO *bio, const EVP_MD *md, unsigned char *mdbuf,
 
 	EVP_DigestFinal(mdctx, mdbuf, NULL);
 	EVP_MD_CTX_free(mdctx);
+#endif
+	return;
 }
 
 
@@ -2060,8 +2098,47 @@ static unsigned char *calc_page_hash(char *indata, unsigned int peheader, int pe
 	int phlen = pphlen * (3 + nsections + sigpos / pagesize);
 	unsigned char *res = malloc(phlen);
 	unsigned char *zeroes = calloc(pagesize, 1);
-	EVP_MD_CTX *mdctx=NULL;
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+	EVP_MD_CTX mdctx;
+	EVP_MD_CTX_init(&mdctx);
+	EVP_DigestInit(&mdctx, md);
+	EVP_DigestUpdate(&mdctx, indata, peheader + 88);
+	EVP_DigestUpdate(&mdctx, indata + peheader + 92, 60 + pe32plus*16);
+	EVP_DigestUpdate(&mdctx, indata + peheader + 160 + pe32plus*16, hdrsize - (peheader + 160 + pe32plus*16));
+	EVP_DigestUpdate(&mdctx, zeroes, pagesize - hdrsize);
+	memset(res, 0, 4);
+	EVP_DigestFinal(&mdctx, res + 4, NULL);
 
+	unsigned short sizeofopthdr = GET_UINT16_LE(indata + peheader + 20);
+	char *sections = indata + peheader + 24 + sizeofopthdr;
+	int i, pi = 1;
+	unsigned int lastpos = 0;
+	for (i=0; i<nsections; i++) {
+		unsigned int rs = GET_UINT32_LE(sections + 16);
+		unsigned int ro = GET_UINT32_LE(sections + 20);
+		unsigned int l;
+		for (l=0; l < rs; l+=pagesize, pi++) {
+			PUT_UINT32_LE(ro + l, res + pi*pphlen);
+			EVP_DigestInit(&mdctx, md);
+			if (rs - l < pagesize) {
+				EVP_DigestUpdate(&mdctx, indata + ro + l, rs - l);
+				EVP_DigestUpdate(&mdctx, zeroes, pagesize - (rs - l));
+			} else {
+				EVP_DigestUpdate(&mdctx, indata + ro + l, pagesize);
+			}
+			EVP_DigestFinal(&mdctx, res + pi*pphlen + 4, NULL);
+		}
+		lastpos = ro + rs;
+		sections += 40;
+	}
+	PUT_UINT32_LE(lastpos, res + pi*pphlen);
+	memset(res + pi*pphlen + 4, 0, EVP_MD_size(md));
+	pi++;
+	free(zeroes);
+	*rphlen = pi*pphlen;
+	return res;
+#else	
+	EVP_MD_CTX *mdctx=NULL;
 	mdctx = EVP_MD_CTX_new();
 	if (mdctx == NULL) {
 		return NULL;
@@ -2104,6 +2181,7 @@ static unsigned char *calc_page_hash(char *indata, unsigned int peheader, int pe
 	EVP_MD_CTX_free(mdctx);
 	mdctx = NULL;
 	return res;
+#endif
 }
 
 static int verify_pe_pkcs7(PKCS7 *p7, char *indata, unsigned int peheader, int pe32plus,
