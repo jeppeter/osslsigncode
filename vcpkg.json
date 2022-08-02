@@ -1,0 +1,12 @@
+{
+    "name": "osslsigncode",
+    "version-string": "2.4",
+    "dependencies": [
+        "openssl",
+        "curl",
+        {
+            "name": "python3",
+            "platform": "!(windows & static) & !osx"
+        }
+    ]
+}
