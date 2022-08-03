@@ -95,14 +95,15 @@ function Error()
 }
 
 function run_command_must_succ()
-{
-	Debug "run [$@]"
-	$@
+{	
+	local _cmd="$@";
+	$_cmd;
 	if [ $? -ne 0 ]
 	then
-		Error "run [$@] error[$?]"
+		Error "run [$_cmd] error[$?]"
 		exit 5
 	fi
+	Debug "run [$_cmd] succ";
 }
 
 function __sign_inner()
@@ -193,7 +194,44 @@ function sign_handler()
 	do
 		__sign_inner "$_i" "$temppass"
 	done
+}
 
+function __genkey()
+{
+	local gtype=$1;
+	local goutput=$2;
+	local gbits=$3;
+	local passwd=$4;
+
+	if [ "$gtype" = "rsa" ]
+	then
+		crypto="-algorithm RSA -pkeyopt rsa_keygen_bits:$gbits";
+	else
+		crypto="-algorithm EC  -pkeyopt ec_paramgen_curve:secp384r1 -pkeyopt ec_param_enc:named_curve";
+	fi
+	run_command_must_succ openssl genpkey ${crypto} -aes-256-cbc -pass "pass:${passwd}" -out $goutput;
+}
+
+DEFAULT_KEY_TYPE=rsa;
+DEFAULT_PRIVATE_FILE=root_private.pem;
+
+function genkey_handler()
+{
+	local gtype=$DEFAULT_KEY_TYPE;
+	local goutput=$DEFAULT_PRIVATE_FILE;
+
+	if [ ${#subnargs[@]} -gt 0 ]
+	then
+		gtype=${subnargs[0]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 1 ]
+	then
+		goutput=${subnargs[1]};
+	fi
+
+	Debug "gtype [$gtype] goutput [$goutput]";
+	__genkey "$gtype" "$goutput" "$bits" "$password";
 }
 
 read -r -d '' OPTIONS<<EOFMM
@@ -202,8 +240,12 @@ read -r -d '' OPTIONS<<EOFMM
 		"pkcs12|P" : "",
 		"password|p" : "",
 		"temppass|T" : "",
+		"bits|B" : 2048,
 		"sign<SUBCOMMAND>##to sign file##" : {
 			"\$" : "+"
+		},
+		"genkey<SUBCOMMAND>##[rsa|ec] [outname] default outname root_private.pem##" : {
+			"\$" : "*"
 		}
 	}
 EOFMM
@@ -215,6 +257,9 @@ test_verbose=$verbose
 if [ "$SUBCOMMAND" = "sign" ]
 then
 	sign_handler
+elif [ "$SUBCOMMAND" = "genkey" ]
+then
+	genkey_handler
 else
 	Error "not supported subcommand[$SUBCOMMAND]"
 	exit 4
