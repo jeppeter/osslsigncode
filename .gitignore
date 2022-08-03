@@ -19,7 +19,6 @@ stamp-h1
 
 .#*#
 .*.bak
-.*.orig
 .*.rej
 .*~
 #*#
@@ -33,7 +32,6 @@ stamp-h1
 *.la
 *.lib
 *.lo
-*.orig
 *.pc
 *.pdb
 *.rej
