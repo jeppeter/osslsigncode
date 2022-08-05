@@ -214,6 +214,7 @@ function __genkey()
 
 DEFAULT_KEY_TYPE=rsa;
 DEFAULT_PRIVATE_FILE=root_private.pem;
+DEFAULT_CERT_FILE=root_cert.pem;
 
 function genkey_handler()
 {
@@ -231,20 +232,76 @@ function genkey_handler()
 	fi
 
 	Debug "gtype [$gtype] goutput [$goutput]";
-	__genkey "$gtype" "$goutput" "$bits" "$password";
+	__genkey "$gtype" "$goutput" "$bits" "$passin";
+}
+
+function mkcert_inner()
+{
+	local _cnname=$1;
+	local _privpem=$2;
+	local _certpem=$3;
+	local _password=$4;
+	local _days=$5;
+	local _tmpcfg=`mktemp`;
+
+	cat > $_tmpcfg <<CONFIGEOF
+[req]
+encrypt_key = yes
+prompt = no
+utf8 = yes
+string_mask = utf8only
+distinguished_name = dn
+x509_extensions = v3_ca
+
+[v3_ca]
+subjectKeyIdentifier = hash
+basicConstraints = critical, CA:TRUE, pathlen:0
+keyUsage = critical, keyCertSign, cRLSign
+
+[dn]
+CN = ${_cnname} Root CA
+CONFIGEOF
+
+	run_command_must_succ openssl req -batch -verbose -new -sha256 -x509 -days $_days -passin "pass:${_password}" -key "$_privpem" -out "$_certpem" -config $_tmpcfg;
+	rm -f $_tmpcfg;
+
+}
+
+function mkcert_handler()
+{
+	local _privpem=$DEFAULT_PRIVATE_FILE;
+	local _certpem=$DEFAULT_CERT_FILE;
+
+	if [ ${#subnargs[@]} -gt 0 ]
+	then
+		_privpem=${subnargs[0]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 1 ]
+	then
+		_certpem=${subnargs[1]};
+	fi
+
+	mkcert_inner "$cnname" "$_privpem" "$_certpem" "$passin" "$days";
 }
 
 read -r -d '' OPTIONS<<EOFMM
 	{
 		"verbose|v" : "+",
 		"pkcs12|P" : "",
-		"password|p" : "",
+		"passin" : "",
+		"passout" : "",
 		"temppass|T" : "",
+		"days" : 365,
 		"bits|B" : 2048,
+		"cnname" : "samplecn",
 		"sign<SUBCOMMAND>##to sign file##" : {
 			"\$" : "+"
 		},
 		"genkey<SUBCOMMAND>##[rsa|ec] [outname] default outname root_private.pem##" : {
+			"\$" : "*"
+		},
+		"mkcert<SUBCOMMAND>##privpem certpem default privpem root_private.pem default certpem root_cert.pem ##" : {
 			"\$" : "*"
 		}
 	}
@@ -260,6 +317,9 @@ then
 elif [ "$SUBCOMMAND" = "genkey" ]
 then
 	genkey_handler
+elif [ "$SUBCOMMAND" = "mkcert" ]
+then
+	mkcert_handler
 else
 	Error "not supported subcommand[$SUBCOMMAND]"
 	exit 4
