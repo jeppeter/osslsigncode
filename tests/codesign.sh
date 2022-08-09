@@ -212,9 +212,22 @@ function __genkey()
 	run_command_must_succ openssl genpkey ${crypto} -aes-256-cbc -pass "pass:${passwd}" -out $goutput;
 }
 
+function __genpubkey()
+{
+	local _privpem=$1;
+	local _pubpem=$2;
+	local _passin=$3;
+
+	run_command_must_succ openssl pkey -passin "pass:${_passin}" -in "${_privpem}" -pubout -out "${_pubpem}"
+}
+
 DEFAULT_KEY_TYPE=rsa;
 DEFAULT_PRIVATE_FILE=root_private.pem;
 DEFAULT_CERT_FILE=root_cert.pem;
+DEFAULT_SIGN_PRIVATE=sign_private.pem;
+DEFAULT_SIGN_PUBLIC=sign_public.pem;
+DEFAULT_SIGN_CSR=sign_csr.pem;
+DEFAULT_SIGN_CERT=sign_cert.pem;
 
 function genkey_handler()
 {
@@ -263,14 +276,16 @@ CN = ${_cnname} Root CA
 CONFIGEOF
 
 	run_command_must_succ openssl req -batch -verbose -new -sha256 -x509 -days $_days -passin "pass:${_password}" -key "$_privpem" -out "$_certpem" -config $_tmpcfg;
-	rm -f $_tmpcfg;
+	#rm -f $_tmpcfg;
 
 }
 
 function mkcert_handler()
 {
 	local _privpem=$DEFAULT_PRIVATE_FILE;
-	local _certpem=$DEFAULT_CERT_FILE;
+	local _rootcert=$DEFAULT_CERT_FILE;
+	local _rootpriv=$DEFAULT_PRIVATE_FILE;
+
 
 	if [ ${#subnargs[@]} -gt 0 ]
 	then
@@ -283,6 +298,79 @@ function mkcert_handler()
 	fi
 
 	mkcert_inner "$cnname" "$_privpem" "$_certpem" "$passin" "$days";
+}
+
+function mksigncert_handler()
+{
+	local _privpem=$DEFAULT_SIGN_PRIVATE;
+	local _pubpem=$DEFAULT_SIGN_PUBLIC;
+	local _csrpem=$DEFAULT_SIGN_CSR;
+	local _certpem=$DEFAULT_SIGN_CERT;
+	local _rootcert=$DEFAULT_CERT_FILE;
+	local _rootpriv=$DEFAULT_PRIVATE_FILE;
+	local _gtype=rsa;
+	local _csrtmpcfg=`mktemp`
+
+	if [ ${#subnargs[@]} -gt 0 ]
+	then
+		_gtype=${subnargs[0]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 1 ]
+	then
+		_privpem=${subnargs[1]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 2 ]
+	then
+		_csrpem=${subnargs[2]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 3 ]
+	then
+		_pubpem=${subnargs[3]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 4 ]
+	then
+		_certpem=${subnargs[4]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 5 ]
+	then
+		_rootcert=${subnargs[5]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 6 ]
+	then
+		_rootpriv=${subnargs[6]};
+	fi
+
+	cat > $_csrtmpcfg <<CONFIGEOF
+[req]
+encrypt_key = yes
+prompt = no
+utf8 = yes
+string_mask = utf8only
+distinguished_name = dn
+req_extensions = v3_req
+
+[v3_req]
+subjectKeyIdentifier = hash
+keyUsage = critical, digitalSignature
+# msCodeInd = Microsoft Individual Code Signing
+# msCodeCom = Microsoft Commercial Code Signing
+extendedKeyUsage = critical, codeSigning, msCodeInd
+
+[dn]
+CN = ${cnname} Code Signing Authority
+CONFIGEOF
+
+
+	__genkey "$_gtype" "$_privpem" "$bits" "$passin";
+	__genpubkey "$_privpem"  "$_pubpem" "$passin";
+	run_command_must_succ openssl req -batch -verbose -new -sha256  -passin "pass:${passin}" -key "$_privpem" -out "$_csrpem" -config "${_csrtmpcfg}";
+	run_command_must_succ openssl x509 -req -sha256 -days $days -extfile "$_csrtmpcfg" -extensions v3_req -in "${_csrpem}" -passin "pass:${passin}" -CA "${_rootcert}" -CAkey "${_rootpriv}" -CAcreateserial -out "${_certpem}"
 }
 
 read -r -d '' OPTIONS<<EOFMM
@@ -303,6 +391,9 @@ read -r -d '' OPTIONS<<EOFMM
 		},
 		"mkcert<SUBCOMMAND>##privpem certpem default privpem root_private.pem default certpem root_cert.pem ##" : {
 			"\$" : "*"
+		},
+		"mksigncert<SUBCOMMAND>##[rsa|dsa] [privpem] [certpem] [pubpem] [certpem] [rootcert] [rootpriv] default privpem $DEFAULT_SIGN_PRIVATE default certpem $DEFAULT_SIGN_CSR default pubpem $DEFAULT_SIGN_PUBLIC certpem default $DEFAULT_SIGN_CERT rootcert default $DEFAULT_CERT_FILE rootpriv default $DEFAULT_PRIVATE_FILE ##" : {
+			"\$" : "*"
 		}
 	}
 EOFMM
@@ -320,6 +411,9 @@ then
 elif [ "$SUBCOMMAND" = "mkcert" ]
 then
 	mkcert_handler
+elif [ "$SUBCOMMAND" = "mksigncert" ]
+then
+	mksigncert_handler
 else
 	Error "not supported subcommand[$SUBCOMMAND]"
 	exit 4
