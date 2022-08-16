@@ -229,6 +229,8 @@ DEFAULT_SIGN_PUBLIC=sign_public.pem;
 DEFAULT_SIGN_CSR=sign_csr.pem;
 DEFAULT_SIGN_CERT=sign_cert.pem;
 DEFAULT_SIGN_P12=sign.p12;
+DEFAULT_GPG_ASC=gpg.asc;
+DEFAULT_GPG_FILE=gpg.gpg;
 
 function genkey_handler()
 {
@@ -382,6 +384,33 @@ CONFIGEOF
 	run_command_must_succ openssl pkcs12 -export -keypbe aes-256-cbc -certpbe aes-256-cbc -macalg sha256 -passout "pass:${passin}" -passin "pass:${passin}" -inkey "${_privpem}" -in "${_certpem}" -chain -CAfile "${_rootcert}" -out "${_signp12}"
 }
 
+function gpgbatch_handler()
+{
+	local _signp12=$DEFAULT_SIGN_P12;
+	local _gpgasc=$DEFAULT_GPG_ASC;
+	local _gpgfile=$DEFAULT_GPG_FILE;
+
+	if [ ${#subnargs[@]} -gt 0 ]
+	then
+		_signp12=${subnargs[0]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 1 ]
+	then
+		_gpgasc=${subnargs[1]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 2 ]
+	then
+		_gpgfile=${subnargs[2]};
+	fi
+
+	run_command_must_succ gpg --batch --verbose --yes --passphrase "${passin}" --cipher-algo aes256 --digest-algo sha512 --s2k-cipher-algo aes256 --s2k-digest-algo sha512 --compress-algo none --set-filename 'ff' --output "${_gpgasc}" --armor --symmetric "${_signp12}"
+
+	run_command_must_succ gpg --batch --verbose --yes --passphrase "${passin}"  --cipher-algo aes256 --digest-algo sha512 --s2k-cipher-algo aes256 --s2k-digest-algo sha512 --compress-algo none --set-filename 'ff' --output "${_gpgfile}" --symmetric "${_signp12}"
+
+}
+
 read -r -d '' OPTIONS<<EOFMM
 	{
 		"verbose|v" : "+",
@@ -403,6 +432,9 @@ read -r -d '' OPTIONS<<EOFMM
 		},
 		"mksigncert<SUBCOMMAND>##[rsa|dsa] [privpem] [certpem] [pubpem] [certpem] [rootcert] [rootpriv] [signp12] default privpem $DEFAULT_SIGN_PRIVATE default certpem $DEFAULT_SIGN_CSR default pubpem $DEFAULT_SIGN_PUBLIC certpem default $DEFAULT_SIGN_CERT rootcert default $DEFAULT_CERT_FILE rootpriv default $DEFAULT_PRIVATE_FILE default signp12 $DEFAULT_SIGN_P12 ##" : {
 			"\$" : "*"
+		},
+		"gpgbatch<SUBCOMMAND>##[signp12] [gpgasc] [gpgfile]  signp12 default $DEFAULT_SIGN_P12 gpgasc default $DEFAULT_GPG_ASC gpgfile $DEFAULT_GPG_FILE##" : {
+			"\$" : "*"
 		}
 	}
 EOFMM
@@ -423,6 +455,9 @@ then
 elif [ "$SUBCOMMAND" = "mksigncert" ]
 then
 	mksigncert_handler
+elif [ "$SUBCOMMAND" = "gpgbatch" ]
+then
+	gpgbatch_handler
 else
 	Error "not supported subcommand[$SUBCOMMAND]"
 	exit 4
