@@ -237,6 +237,11 @@ function genkey_handler()
 	local gtype=$DEFAULT_KEY_TYPE;
 	local goutput=$DEFAULT_PRIVATE_FILE;
 
+	if [ -n "$basedir" ]
+	then
+		goutput="$basedir/$goutput";
+	fi
+
 	if [ ${#subnargs[@]} -gt 0 ]
 	then
 		gtype=${subnargs[0]};
@@ -286,9 +291,14 @@ CONFIGEOF
 function mkcert_handler()
 {
 	local _privpem=$DEFAULT_PRIVATE_FILE;
-	local _rootcert=$DEFAULT_CERT_FILE;
 	local _rootpriv=$DEFAULT_PRIVATE_FILE;
+	local _certpem=$DEFAULT_CERT_FILE;
 
+	if [ -n "$basedir" ]
+	then
+		_privpem="$basedir/$_privpem";
+		_certpem="$basedir/$_certpem";
+	fi
 
 	if [ ${#subnargs[@]} -gt 0 ]
 	then
@@ -314,6 +324,17 @@ function mksigncert_handler()
 	local _signp12=$DEFAULT_SIGN_P12;
 	local _gtype=rsa;
 	local _csrtmpcfg=`mktemp`
+
+	if [ -n "$basedir" ]
+	then
+		_privpem="$basedir/$_privpem";
+		_pubpem="$basedir/$_pubpem";
+		_csrpem="$basedir/$_csrpem";
+		_certpem="$basedir/$_certpem";
+		_rootcert="$basedir/$_rootcert";
+		_rootpriv="$basedir/$_rootpriv";
+		_signp12="$basedir/$_signp12";
+	fi	
 
 	if [ ${#subnargs[@]} -gt 0 ]
 	then
@@ -390,6 +411,13 @@ function gpgbatch_handler()
 	local _gpgasc=$DEFAULT_GPG_ASC;
 	local _gpgfile=$DEFAULT_GPG_FILE;
 
+	if [ -n "$basedir" ]
+	then
+		_signp12="$basedir/$_signp12";
+		_gpgasc="$basedir/$_gpgasc";
+		_gpgfile="$basedir/$_gpgfile";
+	fi	
+
 	if [ ${#subnargs[@]} -gt 0 ]
 	then
 		_signp12=${subnargs[0]};
@@ -421,6 +449,7 @@ read -r -d '' OPTIONS<<EOFMM
 		"days" : 365,
 		"bits|B" : 2048,
 		"cnname" : "samplecn",
+		"basedir" : "",
 		"sign<SUBCOMMAND>##to sign file##" : {
 			"\$" : "+"
 		},
