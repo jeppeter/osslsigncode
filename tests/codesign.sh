@@ -231,6 +231,8 @@ DEFAULT_SIGN_CERT=sign_cert.pem;
 DEFAULT_SIGN_P12=sign.p12;
 DEFAULT_GPG_ASC=gpg.asc;
 DEFAULT_GPG_FILE=gpg.gpg;
+DEFAULT_GPG_PUBFILE=gpg.pub;
+DEFAULT_GPG_PRIVFILE=gpg.priv;
 
 function genkey_handler()
 {
@@ -439,6 +441,49 @@ function gpgbatch_handler()
 
 }
 
+function gpggenkey_handler()
+{
+	local _pubfile=$DEFAULT_GPG_PUBFILE;
+	local _privfile=$DEFAULT_GPG_PRIVFILE;
+	local _tmpf=`mktemp`
+
+	if [ -n "$basedir" ]
+	then
+		_pubfile="$basedir/$_pubfile";
+		_privfile="$basedir/$_privfile";
+	fi	
+
+	if [ ${#subnargs[@]} -gt 0 ]
+	then
+		_pubfile=${subnargs[0]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 1 ]
+	then
+		_privfile=${subnargs[1]};
+	fi
+
+cat > $_tmpf <<EOF
+    #%echo Generating a basic OpenPGP key
+    Key-Type: RSA
+    Key-Length: 2048
+    Subkey-Type: RSA
+    Subkey-Length: 2048
+    Name-Real: $username
+    Name-Comment: $username comment
+    Name-Email: $username@user.info
+    Expire-Date: 0
+    Passphrase: $passin
+    %pubring $_pubfile
+    %secring $_privfile
+    # Do a commit here, so that we can later print "done" :-)
+    %commit
+    #%echo done
+EOF
+	run_command_must_succ gpg --batch --verbose --gen-key $_tmpf
+}
+
+
 read -r -d '' OPTIONS<<EOFMM
 	{
 		"verbose|v" : "+",
@@ -450,6 +495,7 @@ read -r -d '' OPTIONS<<EOFMM
 		"bits|B" : 2048,
 		"cnname" : "samplecn",
 		"basedir" : "",
+		"username" : "$USER",
 		"sign<SUBCOMMAND>##to sign file##" : {
 			"\$" : "+"
 		},
@@ -463,6 +509,9 @@ read -r -d '' OPTIONS<<EOFMM
 			"\$" : "*"
 		},
 		"gpgbatch<SUBCOMMAND>##[signp12] [gpgasc] [gpgfile]  signp12 default $DEFAULT_SIGN_P12 gpgasc default $DEFAULT_GPG_ASC gpgfile $DEFAULT_GPG_FILE##" : {
+			"\$" : "*"
+		},
+		"gpggenkey<SUBCOMMAND>##[pubfile] [secretfile] pubfile default $DEFAULT_GPG_PUBFILE secretfile default $DEFAULT_GPG_PRIVFILE##" : {
 			"\$" : "*"
 		}
 	}
@@ -487,6 +536,9 @@ then
 elif [ "$SUBCOMMAND" = "gpgbatch" ]
 then
 	gpgbatch_handler
+elif [ "$SUBCOMMAND" = "gpggenkey" ]
+then
+	gpggenkey_handler
 else
 	Error "not supported subcommand[$SUBCOMMAND]"
 	exit 4
