@@ -483,6 +483,40 @@ EOF
 	run_command_must_succ gpg --batch --verbose --gen-key $_tmpf
 }
 
+function signexe_handler()
+{
+	local _exefile="";
+	local _signp12=$DEFAULT_SIGN_P12;
+	local _ossl="$_parentdir/osslsigncode"
+	local _out1="";
+	local _tsweb="https://tsa.swisssign.net";
+
+	if [ -n "$basedir" ]
+	then
+		_signp12="$basedir/$_signp12";
+	fi	
+
+	if [ ${#subnargs[@]} -gt 0 ]
+	then
+		_exefile=${subnargs[0]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 1 ]
+	then
+		_signp12=${subnargs[1]};
+	fi
+
+	if [ -z "$_exefile" ]
+	then
+		echo "must specified exe file" >&2
+		exit 4
+	fi
+
+	_out1="${_exefile}.out1"
+
+	run_command_must_succ "$_ossl" sign -h sha256 -in "${_exefile}" -out "${_out1}" -ts "${_tsweb}" -pkcs12 "${_signp12}" -pass \"${passin}\"
+}
+
 
 read -r -d '' OPTIONS<<EOFMM
 	{
@@ -513,6 +547,9 @@ read -r -d '' OPTIONS<<EOFMM
 		},
 		"gpggenkey<SUBCOMMAND>##[pubfile] [secretfile] pubfile default $DEFAULT_GPG_PUBFILE secretfile default $DEFAULT_GPG_PRIVFILE##" : {
 			"\$" : "*"
+		},
+		"signexe<SUBCOMMAND>##exefile [signp12] to sign exe file##" : {
+			"\$" : "+"
 		}
 	}
 EOFMM
@@ -539,6 +576,9 @@ then
 elif [ "$SUBCOMMAND" = "gpggenkey" ]
 then
 	gpggenkey_handler
+elif [ "$SUBCOMMAND" = "signexe" ]
+then
+	signexe_handler
 else
 	Error "not supported subcommand[$SUBCOMMAND]"
 	exit 4
