@@ -115,6 +115,7 @@
 #endif /* OPENSSL_NO_ENGINE */
 
 #include "msi.h"
+#include "log.h"
 
 #ifdef ENABLE_CURL
 #ifdef __CYGWIN__
@@ -5949,6 +5950,8 @@ int main(int argc, char **argv)
 	/* reset options */
 	memset(&options, 0, sizeof(GLOBAL_OPTIONS));
 
+	OSSL_DEBUG(" ");
+
 	/* Set up OpenSSL */
 	if (!OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS
 			| OPENSSL_INIT_ADD_ALL_CIPHERS
@@ -5966,32 +5969,41 @@ int main(int argc, char **argv)
 	/* reset crypto */
 	memset(&cparams, 0, sizeof(CRYPTO_PARAMS));
 
+	OSSL_DEBUG(" ");
 	/* reset MSI parameters */
 	memset(&msiparams, 0, sizeof(MSI_PARAMS));
 	msiparams.msi = NULL;
 	msiparams.dirent = NULL;
 
 	/* commands and options initialization */
-	if (!main_configure(argc, argv, &cmd, &options))
+	if (!main_configure(argc, argv, &cmd, &options)){
+		OSSL_DEBUG(" ");
 		goto err_cleanup;
+	}
 	if (!read_password(&options)) {
 		printf("Failed to read password from file: %s\n", options.readpass);
 		goto err_cleanup;
 	}
 
+	OSSL_DEBUG(" ");
 	/* read key and certificates */
-	if (cmd == CMD_SIGN && !read_crypto_params(&options, &cparams))
+	if (cmd == CMD_SIGN && !read_crypto_params(&options, &cparams)){
 		goto err_cleanup;
+	}
+
+	OSSL_DEBUG(" ");
 
 	/* check if indata is cab or pe */
 	filesize = get_file_size(options.infile);
-	if (filesize == 0)
+	if (filesize == 0){
 		goto err_cleanup;
+	}
 
 	/* reset file header */
 	memset(&header, 0, sizeof(FILE_HEADER));
 	header.fileend = filesize;
 
+	OSSL_DEBUG(" ");
 	indata = map_file(options.infile, filesize);
 	if (!indata)
 		DO_EXIT_1("Failed to open file: %s\n", options.infile);
@@ -6000,11 +6012,14 @@ int main(int argc, char **argv)
 		ret = 1; /* Failed */
 		goto err_cleanup;
 	}
+
+	OSSL_DEBUG(" ");
 	if (!input_validation(type, &options, &header, &msiparams, indata, filesize)) {
 		ret = 1; /* Failed */
 		goto err_cleanup;
 	}
 
+	OSSL_DEBUG(" ");
 	/* search catalog file to determine whether the file is signed in a catalog */
 	if (options.catalog) {
 		uint32_t catsize = get_file_size(options.catalog);
