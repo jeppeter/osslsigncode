@@ -3592,21 +3592,25 @@ static void pe_modify_header(char *indata, FILE_HEADER *header, BIO *hash, BIO *
 	char *buf = OPENSSL_malloc(SIZE_64K);
 
 	i = (int)header->header_size + 88;
+	OSSL_DEBUG("out data [%d:0x%x]", i,i);
 	BIO_write(hash, indata, i);
 	memset(buf, 0, 4);
 	BIO_write(outdata, buf, 4); /* zero out checksum */
 	i += 4;
+	OSSL_DEBUG("i [%d:0x%x] len [%d:0x%x]", i,i, 60+ header->pe32plus * 16,60+ header->pe32plus * 16);
 	BIO_write(hash, indata + i, 60 + (int)header->pe32plus * 16);
 	i += 60 + (int)header->pe32plus * 16;
 	memset(buf, 0, 8);
 	BIO_write(outdata, buf, 8); /* zero out sigtable offset + pos */
 	i += 8;
+	OSSL_DEBUG("at [%d:0x%x] len [%d:0x%x]", i,i, header->fileend- i, header->fileend - i);
 	BIO_write(hash, indata + i, (int)header->fileend - i);
 
 	/* pad (with 0's) pe file to 8 byte boundary */
 	len = 8 - header->fileend % 8;
 	if (len > 0 && len != 8) {
 		memset(buf, 0, (size_t)len);
+		OSSL_BUFFER_DEBUG(buf,len,"offset");
 		BIO_write(hash, buf, len);
 		header->fileend += (uint32_t)len;
 	}
@@ -4574,6 +4578,7 @@ static int append_signature(PKCS7 *sig, PKCS7 *cursig, file_type_t type,
 	}
 	i2d_PKCS7(outsig, &p);
 	p -= *len;
+	OSSL_BUFFER_DEBUG(p,*len,"i2d_PKCS7 output");
 	*padlen = (8 - *len%8) % 8;
 
 	if (type == FILE_TYPE_PE) {
@@ -5505,6 +5510,7 @@ static PKCS7 *pe_presign_file(file_type_t type, cmd_type_t cmd, FILE_HEADER *hea
 	/* Obtain a current signature from previously-signed file */
 	if ((cmd == CMD_SIGN && options->nest) ||
 			(cmd == CMD_ATTACH && options->nest) || cmd == CMD_ADD) {
+		OSSL_DEBUG(" ");
 		*cursig = pe_extract_existing_pkcs7(indata, header);
 		if (!*cursig) {
 			printf("Unable to extract existing signature\n");
