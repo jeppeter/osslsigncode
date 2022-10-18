@@ -188,6 +188,27 @@
 
 #define INVALID_TIME ((time_t)-1)
 
+#define DEBUG_I2D_PKCS7(p7,...)                                                                   \
+do{                                                                                               \
+	char* __pbuf=NULL;                                                                            \
+	u_char* _p=NULL;                                                                              \
+	int _plen=0;                                                                                  \
+	_plen = i2d_PKCS7((p7),NULL);                                                                 \
+	if (_plen > 0) {                                                                              \
+		__pbuf = OPENSSL_malloc(_plen);                                                           \
+		if (__pbuf != NULL) {                                                                     \
+			_p = (u_char*)__pbuf;                                                                 \
+			i2d_PKCS7((p7),&_p);                                                                  \
+			OSSL_BUFFER_DEBUG(__pbuf,_plen,__VA_ARGS__);                                          \
+			OPENSSL_free(__pbuf);                                                                 \
+		}                                                                                         \
+		__pbuf = NULL;                                                                            \
+		_p = NULL;                                                                                \
+	} else {                                                                                      \
+		OSSL_DEBUG(__VA_ARGS__);                                                                  \
+	}                                                                                             \
+}while(0)
+
 typedef struct SIGNATURE_st {
 	PKCS7 *p7;
 	int md_nid;
@@ -4461,10 +4482,12 @@ static PKCS7 *create_new_signature(file_type_t type,
 		 * structure or loaded from the security token, so we may omit to check
 		 * the consistency of a private key with the public key in an X509 certificate
 		 */
-		OSSL_DEBUG("add cert signature");
+		DEBUG_I2D_PKCS7(sig,"before cert");
 		si = PKCS7_add_signature(sig, cparams->cert, cparams->pkey, options->md);
-		if (si == NULL)
+		if (si == NULL){
 			return NULL; /* FAILED */
+		}
+		DEBUG_I2D_PKCS7(sig,"after cert");
 	} else {
 		/* find the signer's certificate located somewhere in the whole certificate chain */
 		for (i=0; i<sk_X509_num(cparams->certs); i++) {
@@ -4496,42 +4519,57 @@ static PKCS7 *create_new_signature(file_type_t type,
 		obj = NULL;
 		PKCS7_add_signed_attribute(si, NID_pkcs9_contentType,
 			V_ASN1_OBJECT, OBJ_txt2obj(SPC_INDIRECT_DATA_OBJID, 1));
+		DEBUG_I2D_PKCS7(sig,"after attribute contentType");
 	}
 
-	if (type == FILE_TYPE_CAB && options->jp >= 0)
+	if (type == FILE_TYPE_CAB && options->jp >= 0){
 		add_jp_attribute(si, options->jp);
+		DEBUG_I2D_PKCS7(sig,"add jp [%d]", options->jp);
+	}
 
-	if (!add_purpose_attribute(si, options->comm))
+	if (!add_purpose_attribute(si, options->comm)){
 		return NULL; /* FAILED */
+	}
 
+	DEBUG_I2D_PKCS7(sig,"add comm");
 	if ((options->desc || options->url) &&
 			!add_opus_attribute(si, options->desc, options->url)) {
 		printf("Couldn't allocate memory for opus info\n");
 		return NULL; /* FAILED */
 	}
+	DEBUG_I2D_PKCS7(sig,"add opus attribute");
 	PKCS7_content_new(sig, NID_pkcs7_data);
 
 	/* add the signer's certificate */
-	if (cparams->cert != NULL)
+	if (cparams->cert != NULL){
 		PKCS7_add_certificate(sig, cparams->cert);
-	if (signer != -1)
+		DEBUG_I2D_PKCS7(sig,"add cert");
+	}
+	if (signer != -1){
 		PKCS7_add_certificate(sig, sk_X509_value(cparams->certs, signer));
+		DEBUG_I2D_PKCS7(sig,"add signer");
+	}
 
 	/* add the certificate chain */
 	for (i=0; i<sk_X509_num(cparams->certs); i++) {
 		if (i == signer)
 			continue;
 		PKCS7_add_certificate(sig, sk_X509_value(cparams->certs, i));
+		DEBUG_I2D_PKCS7(sig,"add [%d] certs",i);
 	}
 	/* add all cross certificates */
 	if (cparams->xcerts) {
-		for (i=0; i<sk_X509_num(cparams->xcerts); i++)
+		for (i=0; i<sk_X509_num(cparams->xcerts); i++){
 			PKCS7_add_certificate(sig, sk_X509_value(cparams->xcerts, i));
+			DEBUG_I2D_PKCS7(sig,"add [%d] xcerts", i);
+		}
 	}
 	/* add crls */
 	if (cparams->crls) {
-		for (i=0; i<sk_X509_CRL_num(cparams->crls); i++)
+		for (i=0; i<sk_X509_CRL_num(cparams->crls); i++){
 			PKCS7_add_crl(sig, sk_X509_CRL_value(cparams->crls, i));
+			DEBUG_I2D_PKCS7(sig,"add [%d] crls",i);
+		}
 	}
 	return sig; /* OK */
 }
