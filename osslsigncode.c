@@ -205,6 +205,29 @@ do{                                                                             
 		__pbuf = NULL;                                                                            \
 		_p = NULL;                                                                                \
 	} else {                                                                                      \
+		OSSL_DEBUG("failed ");                                                                    \
+		OSSL_DEBUG(__VA_ARGS__);                                                                  \
+	}                                                                                             \
+}while(0)
+
+#define DEBUG_PKCS7_SIGNER_INFO(si,...)                                                           \
+do{                                                                                               \
+	char* __pbuf=NULL;                                                                            \
+	u_char* _p=NULL;                                                                              \
+	int _plen=0;                                                                                  \
+	_plen = i2d_PKCS7_SIGNER_INFO((si),NULL);                                                     \
+	if (_plen > 0) {                                                                              \
+		__pbuf = OPENSSL_malloc(_plen);                                                           \
+		if (__pbuf != NULL) {                                                                     \
+			_p = (u_char*)__pbuf;                                                                 \
+			i2d_PKCS7_SIGNER_INFO((si),&_p);                                                      \
+			OSSL_BUFFER_DEBUG(__pbuf,_plen,__VA_ARGS__);                                          \
+			OPENSSL_free(__pbuf);                                                                 \
+		}                                                                                         \
+		__pbuf = NULL;                                                                            \
+		_p = NULL;                                                                                \
+	} else {                                                                                      \
+		OSSL_DEBUG("failed ");                                                                    \
 		OSSL_DEBUG(__VA_ARGS__);                                                                  \
 	}                                                                                             \
 }while(0)
@@ -4482,12 +4505,11 @@ static PKCS7 *create_new_signature(file_type_t type,
 		 * structure or loaded from the security token, so we may omit to check
 		 * the consistency of a private key with the public key in an X509 certificate
 		 */
-		DEBUG_I2D_PKCS7(sig,"before cert");
 		si = PKCS7_add_signature(sig, cparams->cert, cparams->pkey, options->md);
 		if (si == NULL){
 			return NULL; /* FAILED */
 		}
-		DEBUG_I2D_PKCS7(sig,"after cert");
+		DEBUG_PKCS7_SIGNER_INFO(si,"add cert");
 	} else {
 		/* find the signer's certificate located somewhere in the whole certificate chain */
 		for (i=0; i<sk_X509_num(cparams->certs); i++) {
@@ -4506,6 +4528,7 @@ static PKCS7 *create_new_signature(file_type_t type,
 		}
 	}
 	pkcs7_add_signing_time(si, options->time);
+	DEBUG_PKCS7_SIGNER_INFO(si,"add time");
 	if (type == FILE_TYPE_CAT) {
 		PKCS7_add_signed_attribute(si, NID_pkcs9_contentType,
 			V_ASN1_OBJECT, OBJ_txt2obj(MS_CTL_OBJID, 1));
@@ -4520,11 +4543,13 @@ static PKCS7 *create_new_signature(file_type_t type,
 		PKCS7_add_signed_attribute(si, NID_pkcs9_contentType,
 			V_ASN1_OBJECT, OBJ_txt2obj(SPC_INDIRECT_DATA_OBJID, 1));
 		DEBUG_I2D_PKCS7(sig,"after attribute contentType");
+		DEBUG_PKCS7_SIGNER_INFO(si,"add attribute contentType");
 	}
 
 	if (type == FILE_TYPE_CAB && options->jp >= 0){
 		add_jp_attribute(si, options->jp);
 		DEBUG_I2D_PKCS7(sig,"add jp [%d]", options->jp);
+		DEBUG_PKCS7_SIGNER_INFO(si,"add jp [%d]",options->jp);
 	}
 
 	if (!add_purpose_attribute(si, options->comm)){
@@ -4532,12 +4557,14 @@ static PKCS7 *create_new_signature(file_type_t type,
 	}
 
 	DEBUG_I2D_PKCS7(sig,"add comm");
+	DEBUG_PKCS7_SIGNER_INFO(si,"add comm");
 	if ((options->desc || options->url) &&
 			!add_opus_attribute(si, options->desc, options->url)) {
 		printf("Couldn't allocate memory for opus info\n");
 		return NULL; /* FAILED */
 	}
 	DEBUG_I2D_PKCS7(sig,"add opus attribute");
+	DEBUG_PKCS7_SIGNER_INFO(si,"add opus attribute");
 	PKCS7_content_new(sig, NID_pkcs7_data);
 
 	/* add the signer's certificate */
