@@ -232,6 +232,29 @@ do{                                                                             
 	}                                                                                             \
 }while(0)
 
+#define DEBUG_X509(xv,...)                                                                        \
+do{                                                                                               \
+	char* __pbuf=NULL;                                                                            \
+	u_char* _p=NULL;                                                                              \
+	int _plen=0;                                                                                  \
+	_plen = i2d_X509((xv),NULL);                                                                  \
+	if (_plen > 0) {                                                                              \
+		__pbuf = OPENSSL_malloc(_plen);                                                           \
+		if (__pbuf != NULL) {                                                                     \
+			_p = (u_char*)__pbuf;                                                                 \
+			i2d_X509((xv),&_p);                                                                   \
+			OSSL_BUFFER_DEBUG(__pbuf,_plen,__VA_ARGS__);                                          \
+			OPENSSL_free(__pbuf);                                                                 \
+		}                                                                                         \
+		__pbuf = NULL;                                                                            \
+		_p = NULL;                                                                                \
+	} else {                                                                                      \
+		OSSL_DEBUG("failed ");                                                                    \
+		OSSL_DEBUG(__VA_ARGS__);                                                                  \
+	}                                                                                             \
+}while(0)
+
+
 typedef struct SIGNATURE_st {
 	PKCS7 *p7;
 	int md_nid;
@@ -4569,6 +4592,7 @@ static PKCS7 *create_new_signature(file_type_t type,
 
 	/* add the signer's certificate */
 	if (cparams->cert != NULL){
+		DEBUG_X509(cparams->cert,"dump cert");
 		PKCS7_add_certificate(sig, cparams->cert);
 		DEBUG_I2D_PKCS7(sig,"add cert");
 	}
@@ -4581,6 +4605,7 @@ static PKCS7 *create_new_signature(file_type_t type,
 	for (i=0; i<sk_X509_num(cparams->certs); i++) {
 		if (i == signer)
 			continue;
+		DEBUG_X509(sk_X509_value(cparams->certs,i),"dump [%d] certs",i);
 		PKCS7_add_certificate(sig, sk_X509_value(cparams->certs, i));
 		DEBUG_I2D_PKCS7(sig,"add [%d] certs",i);
 	}
