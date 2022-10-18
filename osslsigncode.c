@@ -734,8 +734,17 @@ static int asn1_simple_hdr_len(const u_char *p, int len)
  */
 static int pkcs7_add_signing_time(PKCS7_SIGNER_INFO *si, time_t time)
 {
+	char buf[32];
+	ASN1_OBJECT* obj=NULL;
 	if (time == INVALID_TIME) /* -time option was not specified */
 		return 1; /* success */
+	obj = OBJ_nid2obj(NID_pkcs9_signingTime);
+	if (obj != NULL) {
+		OBJ_obj2txt(buf,32,obj,0);
+		OSSL_DEBUG("add [%s] nid", buf);
+		ASN1_OBJECT_free(obj);
+	}
+	obj = NULL;
 	return PKCS7_add_signed_attribute(si,
 		NID_pkcs9_signingTime, V_ASN1_UTCTIME,
 		ASN1_TIME_adj(NULL, time, 0, 0));
@@ -4440,6 +4449,8 @@ static PKCS7 *create_new_signature(file_type_t type,
 	int i, signer = -1;
 	PKCS7 *sig;
 	PKCS7_SIGNER_INFO *si = NULL;
+	char objtxt[32];
+	ASN1_OBJECT* obj=NULL;
 
 	sig = PKCS7_new();
 	PKCS7_set_type(sig, NID_pkcs7_signed);
@@ -4450,6 +4461,7 @@ static PKCS7 *create_new_signature(file_type_t type,
 		 * structure or loaded from the security token, so we may omit to check
 		 * the consistency of a private key with the public key in an X509 certificate
 		 */
+		OSSL_DEBUG("add cert signature");
 		si = PKCS7_add_signature(sig, cparams->cert, cparams->pkey, options->md);
 		if (si == NULL)
 			return NULL; /* FAILED */
@@ -4458,6 +4470,7 @@ static PKCS7 *create_new_signature(file_type_t type,
 		for (i=0; i<sk_X509_num(cparams->certs); i++) {
 			X509 *signcert = sk_X509_value(cparams->certs, i);
 			if (X509_check_private_key(signcert, cparams->pkey)) {
+				OSSL_DEBUG("add [%d] signature",i);
 				si = PKCS7_add_signature(sig, signcert, cparams->pkey, options->md);
 				signer = i;
 				break;
@@ -4474,6 +4487,13 @@ static PKCS7 *create_new_signature(file_type_t type,
 		PKCS7_add_signed_attribute(si, NID_pkcs9_contentType,
 			V_ASN1_OBJECT, OBJ_txt2obj(MS_CTL_OBJID, 1));
 	} else {
+		obj = OBJ_nid2obj(NID_pkcs9_contentType);
+		if (obj != NULL) {
+			OBJ_obj2txt(objtxt,32,obj,0);
+			OSSL_DEBUG("add [%s] SPC_INDIRECT_DATA_OBJID[%s]", objtxt,SPC_INDIRECT_DATA_OBJID);
+			ASN1_OBJECT_free(obj);
+		}
+		obj = NULL;
 		PKCS7_add_signed_attribute(si, NID_pkcs9_contentType,
 			V_ASN1_OBJECT, OBJ_txt2obj(SPC_INDIRECT_DATA_OBJID, 1));
 	}
