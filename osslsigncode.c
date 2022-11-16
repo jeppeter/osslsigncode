@@ -255,6 +255,50 @@ do{                                                                             
 }while(0)
 
 
+#define DEBUG_SpcIndirectDataContent(xv,...)                                                      \
+do{                                                                                               \
+	char* __pbuf=NULL;                                                                            \
+	u_char* _p=NULL;                                                                              \
+	int _plen=0;                                                                                  \
+	_plen = i2d_SpcIndirectDataContent((xv),NULL);                                                \
+	if (_plen > 0) {                                                                              \
+		__pbuf = OPENSSL_malloc(_plen);                                                           \
+		if (__pbuf != NULL) {                                                                     \
+			_p = (u_char*)__pbuf;                                                                 \
+			i2d_SpcIndirectDataContent((xv),&_p);                                                 \
+			OSSL_BUFFER_DEBUG(__pbuf,_plen,__VA_ARGS__);                                          \
+			OPENSSL_free(__pbuf);                                                                 \
+		}                                                                                         \
+		__pbuf = NULL;                                                                            \
+		_p = NULL;                                                                                \
+	} else {                                                                                      \
+		OSSL_DEBUG("failed ");                                                                    \
+		OSSL_DEBUG(__VA_ARGS__);                                                                  \
+	}                                                                                             \
+}while(0)
+
+#define DEBUG_SpcPeImageData(xv,...)                                                              \
+do{                                                                                               \
+	char* __pbuf=NULL;                                                                            \
+	u_char* _p=NULL;                                                                              \
+	int _plen=0;                                                                                  \
+	_plen = i2d_SpcPeImageData((xv),NULL);                                                        \
+	if (_plen > 0) {                                                                              \
+		__pbuf = OPENSSL_malloc(_plen);                                                           \
+		if (__pbuf != NULL) {                                                                     \
+			_p = (u_char*)__pbuf;                                                                 \
+			i2d_SpcPeImageData((xv),&_p);                                                         \
+			OSSL_BUFFER_DEBUG(__pbuf,_plen,__VA_ARGS__);                                          \
+			OPENSSL_free(__pbuf);                                                                 \
+		}                                                                                         \
+		__pbuf = NULL;                                                                            \
+		_p = NULL;                                                                                \
+	} else {                                                                                      \
+		OSSL_DEBUG("failed ");                                                                    \
+		OSSL_DEBUG(__VA_ARGS__);                                                                  \
+	}                                                                                             \
+}while(0)
+
 typedef struct SIGNATURE_st {
 	PKCS7 *p7;
 	int md_nid;
@@ -1727,6 +1771,7 @@ static int get_indirect_data_blob(u_char **blob, int *len, GLOBAL_OPTIONS *optio
 	idc->data->value = ASN1_TYPE_new();
 	idc->data->value->type = V_ASN1_SEQUENCE;
 	idc->data->value->value.sequence = ASN1_STRING_new();
+	DEBUG_SpcIndirectDataContent(idc,"init idc");
 	if (type == FILE_TYPE_CAB) {
 		SpcLink *link = get_obsolete_link();
 		l = i2d_SpcLink(link, NULL);
@@ -1754,6 +1799,7 @@ static int get_indirect_data_blob(u_char **blob, int *len, GLOBAL_OPTIONS *optio
 		p = OPENSSL_malloc((size_t)l);
 		i2d_SpcPeImageData(pid, &p);
 		p -= l;
+		DEBUG_SpcPeImageData(pid,"SpcPeImageData add");
 		dtype = OBJ_txt2obj(SPC_PE_IMAGE_DATA_OBJID, 1);
 		SpcPeImageData_free(pid);
 	} else if (type == FILE_TYPE_MSI) {
@@ -1793,6 +1839,7 @@ static int get_indirect_data_blob(u_char **blob, int *len, GLOBAL_OPTIONS *optio
 	*blob = OPENSSL_malloc((size_t)*len);
 	p = *blob;
 	i2d_SpcIndirectDataContent(idc, &p);
+	DEBUG_SpcIndirectDataContent(idc,"final idc");
 	SpcIndirectDataContent_free(idc);
 	*len -= EVP_MD_size(options->md);
 	return 1; /* OK */
@@ -4521,6 +4568,7 @@ static PKCS7 *create_new_signature(file_type_t type,
 
 	sig = PKCS7_new();
 	PKCS7_set_type(sig, NID_pkcs7_signed);
+	DEBUG_I2D_PKCS7(sig,"init NID_pkcs7_signed");
 
 	if (cparams->cert != NULL) {
 		/*
@@ -4533,6 +4581,7 @@ static PKCS7 *create_new_signature(file_type_t type,
 			return NULL; /* FAILED */
 		}
 		DEBUG_PKCS7_SIGNER_INFO(si,"add cert");
+		DEBUG_I2D_PKCS7(sig,"sig add cert");
 	} else {
 		/* find the signer's certificate located somewhere in the whole certificate chain */
 		for (i=0; i<sk_X509_num(cparams->certs); i++) {
@@ -4581,6 +4630,7 @@ static PKCS7 *create_new_signature(file_type_t type,
 
 	DEBUG_I2D_PKCS7(sig,"add comm");
 	DEBUG_PKCS7_SIGNER_INFO(si,"add comm");
+	//OSSL_DEBUG("desc [%s] url [%s]", options->desc,options->url);
 	if ((options->desc || options->url) &&
 			!add_opus_attribute(si, options->desc, options->url)) {
 		printf("Couldn't allocate memory for opus info\n");
