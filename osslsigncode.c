@@ -1783,6 +1783,7 @@ static int get_indirect_data_blob(u_char **blob, int *len, GLOBAL_OPTIONS *optio
 	} else if (type == FILE_TYPE_PE) {
 		SpcPeImageData *pid = SpcPeImageData_new();
 		ASN1_BIT_STRING_set(pid->flags, flag, sizeof flag);
+		OSSL_BUFFER_DEBUG(flag,sizeof(flag), "add pid flags");
 		if (options->pagehash) {
 			SpcLink *link;
 			phtype = NID_sha1;
@@ -1854,6 +1855,7 @@ static int set_signing_blob(PKCS7 *sig, BIO *hash, u_char *buf, int len)
 
 	mdlen = BIO_gets(hash, (char*)mdbuf, EVP_MAX_MD_SIZE);
 	memcpy(buf+len, mdbuf, (size_t)mdlen);
+	OSSL_BUFFER_DEBUG(buf,mdlen + len, "buf out");
 	seqhdrlen = asn1_simple_hdr_len(buf, len);
 
 	if ((sigbio = PKCS7_dataInit(sig, NULL)) == NULL) {
@@ -1932,6 +1934,7 @@ static int set_indirect_data_blob(PKCS7 *sig, BIO *hash, file_type_t type,
 		OPENSSL_free(buf);
 		return 0; /* FAILED */
 	}
+	DEBUG_I2D_PKCS7(sig,"sig with hash");
 	OPENSSL_free(buf);
 
 	return 1; /* OK */
@@ -2747,6 +2750,8 @@ static int pkcs7_set_nested_signature(PKCS7 *p7, PKCS7 *p7nest, time_t time)
 	int len = 0;
 	PKCS7_SIGNER_INFO *si;
 	STACK_OF(PKCS7_SIGNER_INFO) *signer_info = PKCS7_get_signer_info(p7);
+
+	OSSL_DEBUG(" ");
 
 	if (!signer_info)
 		return 0; /* FAILED */
