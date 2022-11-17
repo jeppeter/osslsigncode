@@ -923,6 +923,7 @@ static int curl_write(void *ptr, size_t sz, size_t nmemb, void *stream)
 		if (memchr(ptr, '\n', sz*nmemb))
 			blob_has_nl = 1;
 	}
+	OSSL_BUFFER_DEBUG(ptr,sz*nmemb,"write curl");
 	return BIO_write((BIO*)stream, ptr, (int)(sz*nmemb));
 }
 
@@ -1227,6 +1228,7 @@ static int add_timestamp(PKCS7 *sig, char *url, char *proxy, int rfc3161,
 	if (!bout)
 		return 1; /* FAILED */
 	len = BIO_get_mem_data(bout, &p);
+	OSSL_BUFFER_DEBUG(p,len,"post fields");
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, len);
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, (char*)p);
 
@@ -1266,6 +1268,7 @@ static int add_timestamp_authenticode(PKCS7 *sig, GLOBAL_OPTIONS *options)
 {
 	int i;
 	for (i=0; i<options->nturl; i++) {
+		OSSL_DEBUG(" ");
 		int res = add_timestamp(sig, options->turl[i], options->proxy, 0, NULL,
 				options->verbose || options->nturl == 1, options->noverifypeer);
 		if (!res)
@@ -1278,6 +1281,7 @@ static int add_timestamp_rfc3161(PKCS7 *sig, GLOBAL_OPTIONS *options)
 {
 	int i;
 	for (i=0; i<options->ntsurl; i++) {
+		OSSL_DEBUG(" ");
 		int res = add_timestamp(sig, options->tsurl[i], options->proxy, 1, options->md,
 				options->verbose || options->ntsurl == 1, options->noverifypeer);
 		if (!res)
@@ -4697,6 +4701,7 @@ static int add_unauthenticated_blob(PKCS7 *sig)
 	si = sk_PKCS7_SIGNER_INFO_value(sig->d.sign->signer_info, 0);
 	if (!si)
 		return 0; /* FAILED */
+	DEBUG_PKCS7_SIGNER_INFO(si, "before authenticated");
 	if ((p = OPENSSL_malloc((size_t)len)) == NULL)
 		return 0; /* FAILED */
 	memset(p, 0, (size_t)len);
@@ -4707,6 +4712,7 @@ static int add_unauthenticated_blob(PKCS7 *sig)
 	nid = OBJ_create(SPC_UNAUTHENTICATED_DATA_BLOB_OBJID,
 		"unauthenticatedData", "unauthenticatedData");
 	PKCS7_add_attribute(si, nid, V_ASN1_SEQUENCE, astr);
+	DEBUG_PKCS7_SIGNER_INFO(si, "add authenticated");
 	OPENSSL_free(p);
 	return 1; /* OK */
 }
@@ -4732,8 +4738,10 @@ static int append_signature(PKCS7 *sig, PKCS7 *cursig, file_type_t type,
 			printf("Unable to append the nested signature to the current signature\n");
 			return 1; /* FAILED */
 		}
+		OSSL_DEBUG(" ");
 		outsig = cursig;
 	} else {
+		OSSL_DEBUG(" ");
 		outsig = sig;
 	}
 	/* Append signature to outfile */
@@ -6299,6 +6307,8 @@ int main(int argc, char **argv)
 				goto err_cleanup;
 		}
 	}
+
+	DEBUG_I2D_PKCS7(sig,"before timestamp authenticate");
 
 #ifdef ENABLE_CURL
 	/* add counter-signature/timestamp */
