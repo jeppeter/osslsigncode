@@ -1237,6 +1237,7 @@ static int add_timestamp(PKCS7 *sig, char *url, char *proxy, int rfc3161,
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, bin);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write);
+	curl_easy_setopt(curl, CURLOPT_VERBOSE,1);
 	/* Perform the request */
 	res = curl_easy_perform(curl);
 	curl_slist_free_all(slist);
@@ -1252,12 +1253,17 @@ static int add_timestamp(PKCS7 *sig, char *url, char *proxy, int rfc3161,
 		(void)BIO_flush(bin);
 		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 		/* Decode a curl response from BIO and write it into the PKCS7 structure */
-		if (rfc3161)
+		if (rfc3161){
+			OSSL_DEBUG(" ");
 			res = decode_rfc3161_response(sig, bin, verbose);
-		else
+		}
+		else{
+			OSSL_DEBUG(" ");
 			res = decode_authenticode_response(sig, bin, verbose);
-		if (res && verbose)
+		}
+		if (res && verbose){
 			print_timestamp_error(url, http_code);
+		}
 	}
 	/* End a libcurl easy handle */
 	curl_easy_cleanup(curl);
