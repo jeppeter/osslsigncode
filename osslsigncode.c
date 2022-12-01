@@ -2508,6 +2508,7 @@ static void get_signed_attributes(SIGNATURE *signature, STACK_OF(X509_ATTRIBUTE)
 			continue;
 		object_txt[0] = 0x00;
 		OBJ_obj2txt(object_txt, sizeof object_txt, object, 1);
+		OSSL_DEBUG("object_txt [%s]", object_txt);
 		if (!strcmp(object_txt, PKCS9_MESSAGE_DIGEST)) {
 			/* PKCS#9 message digest - Policy OID: 1.2.840.113549.1.9.4 */
 			signature->digest  = X509_ATTRIBUTE_get0_data(attr, 0, V_ASN1_OCTET_STRING, NULL);
@@ -2589,6 +2590,7 @@ static void get_unsigned_attributes(STACK_OF(SIGNATURE) **signatures, SIGNATURE 
 			continue;
 		object_txt[0] = 0x00;
 		OBJ_obj2txt(object_txt, sizeof object_txt, object, 1);
+		OSSL_DEBUG("unattr [%s]",object_txt);
 		if (!strcmp(object_txt, PKCS9_COUNTER_SIGNATURE)) {
 			/* Authenticode Timestamp - Policy OID: 1.2.840.113549.1.9.6 */
 			PKCS7_SIGNER_INFO *countersi;
@@ -2690,8 +2692,9 @@ static int append_signature_list(STACK_OF(SIGNATURE) **signatures, PKCS7 *p7, in
 	signature->blob = NULL;
 
 	auth_attr = PKCS7_get_signed_attributes(si);  /* cont[0] */
-	if (auth_attr)
+	if (auth_attr){
 		get_signed_attributes(signature, auth_attr);
+	}
 
 	unauth_attr = PKCS7_get_attributes(si); /* cont[1] */
 	if (unauth_attr)
@@ -3668,6 +3671,7 @@ static int pe_verify_file(char *indata, FILE_HEADER *header, GLOBAL_OPTIONS *opt
 		printf("Failed to extract PKCS7 data\n\n");
 		goto out;
 	}
+	DEBUG_I2D_PKCS7(p7,"pe extract");
 	if (!append_signature_list(&signatures, p7, 1)) {
 		printf("Failed to create signature list\n\n");
 		PKCS7_free(p7);
