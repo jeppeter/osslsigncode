@@ -2265,6 +2265,12 @@ static int load_file_lookup(X509_STORE *store, char *certs)
 {
 	X509_LOOKUP *lookup;
 	X509_VERIFY_PARAM *param;
+	int i;
+	STACK_OF(X509)* pcerts=NULL;
+	char* pval=NULL;
+	unsigned char* p = NULL;
+	int len=0;
+	int size=0;
 
 	lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file());
 	if (!lookup || !certs)
@@ -2272,6 +2278,41 @@ static int load_file_lookup(X509_STORE *store, char *certs)
 	if (!X509_load_cert_file(lookup, certs, X509_FILETYPE_PEM)) {
 		printf("\nError: no certificate found\n");
 		return 0; /* FAILED */
+	}
+
+	pcerts = X509_STORE_get1_all_certs(store);
+	if (pcerts != NULL) {
+		for(i=0;i<sk_X509_num(pcerts);i++) {
+			X509* curcert = sk_X509_value(pcerts,i);
+			if (curcert != NULL) {
+				len = i2d_X509(curcert,NULL);
+				if (len > 0) {
+					if (len > size) {
+						if (pval) {
+							OPENSSL_free(pval);
+						}
+						pval = NULL;
+						size = len + 1;
+						pval = OPENSSL_malloc(size);
+					}
+					if (pval != NULL) {
+						p = pval;
+						len = i2d_X509(curcert,&p);
+						if (len > 0) {
+							OSSL_BUFFER_DEBUG(pval,len,"dump [%d] cert",i);
+						}
+					}
+				}
+			}
+		}
+
+		if (pval) {
+			OPENSSL_free(pval);
+		}
+		pval = NULL;
+		p = NULL;
+		sk_X509_pop_free(pcerts, X509_free);
+		pcerts = NULL;
 	}
 
 	param = X509_STORE_get0_param(store);
