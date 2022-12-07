@@ -3036,6 +3036,7 @@ static int verify_authenticode(SIGNATURE *signature, GLOBAL_OPTIONS *options, X5
 		bio = BIO_new_mem_buf(signature->p7->d.sign->contents->d.other->value.sequence->data,
 			signature->p7->d.sign->contents->d.other->value.sequence->length);
 	}
+	DEBUG_I2D_PKCS7(signature->p7,"before verify");
 	if (!PKCS7_verify(signature->p7, NULL, store, bio, NULL, 0)) {
 		printf("\nPKCS7_verify error\n");
 		X509_STORE_free(store);
