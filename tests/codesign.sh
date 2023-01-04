@@ -550,6 +550,9 @@ read -r -d '' OPTIONS<<EOFMM
 		},
 		"signexe<SUBCOMMAND>##exefile [signp12] to sign exe file##" : {
 			"\$" : "+"
+		},
+		"batch<SUBCOMMAND>##to pack genkey mkcert mksigncert command##" : {
+			"\$" : "*"
 		}
 	}
 EOFMM
@@ -576,6 +579,11 @@ then
 elif [ "$SUBCOMMAND" = "gpggenkey" ]
 then
 	gpggenkey_handler
+elif [ "$SUBCOMMAND" = "batch" ]
+then
+	genkey_handler
+	mkcert_handler
+	mksigncert_handler	
 elif [ "$SUBCOMMAND" = "signexe" ]
 then
 	signexe_handler
