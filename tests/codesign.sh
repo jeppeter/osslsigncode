@@ -233,6 +233,12 @@ DEFAULT_GPG_ASC=gpg.asc;
 DEFAULT_GPG_FILE=gpg.gpg;
 DEFAULT_GPG_PUBFILE=gpg.pub;
 DEFAULT_GPG_PRIVFILE=gpg.priv;
+DEFAULT_ECPEM=ec.pem;
+DEFAULT_ECTYPE=secp521r1;
+DEFAULT_ECHASH=echash.txt;
+DEFAULT_ECFILE=ecfile.txt;
+DEFAULT_SIGFILE=sig.txt;
+DEFAULT_ECDIGEST=sha256;
 
 function genkey_handler()
 {
@@ -517,6 +523,119 @@ function signexe_handler()
 	run_command_must_succ "$_ossl" sign -h sha256 -in "${_exefile}" -out "${_out1}" -ts "${_tsweb}" -pkcs12 "${_signp12}" -pass \"${passin}\"
 }
 
+function ecgen_handler()
+{
+	local _ecpem="$DEFAULT_ECPEM";
+	local _ectype="$DEFAULT_ECTYPE";
+
+	if [ -n "$basedir" ]
+	then
+		_ecpem="$basedir/$_ecpem";
+	fi	
+
+	if [ ${#subnargs[@]} -gt 0 ]
+	then
+		_ecpem=${subnargs[0]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 1 ]
+	then
+		_ectype=${subnargs[1]};
+	fi
+
+	run_command_must_succ openssl ecparam -genkey -name "$_ectype" -out "$_ecpem" -outform PEM;
+}
+
+function ecsign_handler()
+{
+	local _input="";
+	local _hashfile="$DEFAULT_ECHASH";
+	local _ecpem="$DEFAULT_ECPEM";
+	local _sigfile="$DEFAULT_SIGFILE";
+	local _ecdgst="$DEFAULT_ECDIGEST";
+
+	if [ -n "$basedir" ]
+	then
+		_ecpem="$basedir/$_ecpem";
+		_hashfile="$basedir/$_hashfile";
+		_sigfile="$basedir/$_sigfile";
+	fi
+
+	if [ ${#subnargs[@]} -gt 0 ]
+	then
+		_input=${subnargs[0]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 1 ]
+	then
+		_hashfile=${subnargs[1]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 2 ]
+	then
+		_ecpem=${subnargs[2]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 3 ]
+	then
+		_sigfile=${subnargs[3]};
+	fi
+
+
+	if [ ${#subnargs[@]} -gt 4 ]
+	then
+		_ecdgst=${subnargs[4]};
+	fi
+
+	if [ -z "$_input" ]
+	then
+		Error "please specified input";
+		exit 4;
+	fi
+
+	if [ ! -f "$_input" ]
+	then
+		Error "[$_input] not file";
+		exit 4;
+	fi
+
+	run_command_must_succ openssl dgst "-${_ecdgst}" -binary -out "$_hashfile" "$_input" ;
+	run_command_must_succ openssl pkeyutl -sign -inkey "$_ecpem" -in "$_hashfile" -out "$_sigfile";
+
+}
+
+function ecsign_handler()
+{
+	local _hashfile="$DEFAULT_ECHASH";
+	local _ecpem="$DEFAULT_ECPEM";
+	local _sigfile="$DEFAULT_SIGFILE";
+
+	if [ -n "$basedir" ]
+	then
+		_ecpem="$basedir/$_ecpem";
+		_hashfile="$basedir/$_hashfile";
+		_sigfile="$basedir/$_sigfile";
+	fi
+
+	if [ ${#subnargs[@]} -gt 0 ]
+	then
+		_hashfile=${subnargs[0]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 1 ]
+	then
+		_ecpem=${subnargs[1]};
+	fi
+
+	if [ ${#subnargs[@]} -gt 2 ]
+	then
+		_sigfile=${subnargs[2]};
+	fi
+
+
+	run_command_must_succ openssl pkeyutl -verify -inkey "$_ecpem" -in "$_hashfile" -sigfile "$_sigfile";
+
+}
 
 read -r -d '' OPTIONS<<EOFMM
 	{
@@ -553,6 +672,15 @@ read -r -d '' OPTIONS<<EOFMM
 		},
 		"batch<SUBCOMMAND>##to pack genkey mkcert mksigncert command##" : {
 			"\$" : "*"
+		},
+		"ecgen<SUBCOMMAND>##[ecpem] [typename] to generate ec##" : {
+			"\$" : "*"
+		},
+		"ecsign<SUBCOMMAND>##[inputfile] [hashfile] [ecpem] [sigfile] [dgsttype] to sign with ec##" : {
+			"\$" : "*"
+		},
+		"ecverify<SUBCOMMAND>##[hashfile] [ecpem] [sigfile] to verify with ec##" : {
+			"\$" : "*"
 		}
 	}
 EOFMM
@@ -587,6 +715,15 @@ then
 elif [ "$SUBCOMMAND" = "signexe" ]
 then
 	signexe_handler
+elif [ "$SUBCOMMAND" = "ecgen" ]
+then
+	ecgen_handler
+elif [ "$SUBCOMMAND" = "ecsign" ]
+then
+	ecsign_handler
+elif [ "$SUBCOMMAND" = "ecverify" ]
+then
+	ecverify_handler
 else
 	Error "not supported subcommand[$SUBCOMMAND]"
 	exit 4
