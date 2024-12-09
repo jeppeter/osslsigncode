@@ -1,13 +1,15 @@
 
 CFILES=osslsigncode.c msi.c
 OBJECTS=$(patsubst %.c,%.o,${CFILES})
-C_FLAGS=-DENABLE_CURL=1 -DHAVE_CONFIG_H=1 -I. 
+SSL_INCLUE_PATH=$(shell echo ${HOME}/sources/openssl/include)
+SSL_LIB_PATH=$(shell echo ${HOME}/sources/openssl)
+C_FLAGS=-DENABLE_CURL=1 -DHAVE_CONFIG_H=1 -I. -I${SSL_INCLUE_PATH}
 LINK_FLAGS=-Wall
 all:osslsigncode
 
 
 osslsigncode:$(OBJECTS)
-	gcc ${LINK_FLAGS} -o osslsigncode $(OBJECTS) -lssl -lcrypto -lcurl
+	gcc ${LINK_FLAGS} -o osslsigncode $(OBJECTS) -L${SSL_LIB_PATH} -lssl -lcrypto -lcurl
 
 osslsigncode.o:osslsigncode.c
 
