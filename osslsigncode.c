@@ -1984,6 +1984,7 @@ static void pe_recalc_checksum(BIO *bio, FILE_HEADER *header)
 	/* write back checksum */
 	(void)BIO_seek(bio, header->header_size + 88);
 	PUT_UINT32_LE(checkSum, buf);
+	OSSL_BUFFER_DEBUG(buf,4,"seek data 0x%x:%d",header->header_size + 88,header->header_size + 88);
 	BIO_write(bio, buf, 4);
 }
 
@@ -4847,12 +4848,15 @@ static void update_data_size(file_type_t type, cmd_type_t cmd, FILE_HEADER *head
 			/* Update signature position and size */
 			(void)BIO_seek(outdata, header->header_size + 152 + header->pe32plus * 16);
 			PUT_UINT32_LE(header->fileend, buf); /* Previous file end = signature table start */
+			OSSL_BUFFER_DEBUG(buf,4,"seekend 0x%x:%d",header->header_size + 152 + header->pe32plus * 16,header->header_size + 152 + header->pe32plus * 16);
 			BIO_write(outdata, buf, 4);
 			PUT_UINT32_LE(len+8+padlen, buf);
+			OSSL_BUFFER_DEBUG(buf,4,"append");
 			BIO_write(outdata, buf, 4);
 		}
-		if (cmd == CMD_SIGN || cmd == CMD_REMOVE || cmd == CMD_ADD || cmd == CMD_ATTACH)
+		if (cmd == CMD_SIGN || cmd == CMD_REMOVE || cmd == CMD_ADD || cmd == CMD_ATTACH){
 			pe_recalc_checksum(outdata, header);
+		}
 	} else if (type == FILE_TYPE_CAB && (cmd == CMD_SIGN || cmd == CMD_ADD || cmd == CMD_ATTACH)) {
 		/*
 		 * Update additional data size.
@@ -6380,12 +6384,13 @@ int main(int argc, char **argv)
 		DO_EXIT_0("PKCS7 output failed\n");
 #endif
 
+	DEBUG_I2D_PKCS7(sig,"before append_signature");
 	ret = append_signature(sig, cursig, type, &options, &msiparams, &padlen, &len, outdata);
 	if (ret)
 		DO_EXIT_0("Append signature to outfile failed\n");
 
 skip_signing:
-
+	OSSL_BUFFER_DEBUG(outdata,len,"outdata padlen[%d]",padlen);
 	update_data_size(type, cmd, &header, padlen, len, outdata);
 
 	if (type == FILE_TYPE_MSI) {
