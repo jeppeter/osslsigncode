@@ -4804,20 +4804,23 @@ static int append_signature(PKCS7 *sig, PKCS7 *cursig, file_type_t type,
 	}
 	i2d_PKCS7(outsig, &p);
 	p -= *len;
-	OSSL_BUFFER_DEBUG(p,*len,"i2d_PKCS7 output");
+	//OSSL_BUFFER_DEBUG(p,*len,"i2d_PKCS7 output");
 	*padlen = (8 - *len%8) % 8;
 
 	if (type == FILE_TYPE_PE) {
 		PUT_UINT32_LE(*len + 8 + *padlen, buf);
 		PUT_UINT16_LE(WIN_CERT_REVISION_2_0, buf + 4);
 		PUT_UINT16_LE(WIN_CERT_TYPE_PKCS_SIGNED_DATA, buf + 6);
+		OSSL_BUFFER_DEBUG(buf,8,"out header");
 		BIO_write(outdata, buf, 8);
 	}
 	if (type == FILE_TYPE_PE || type == FILE_TYPE_CAB) {
+		OSSL_BUFFER_DEBUG(p,*len,"outdata");
 		BIO_write(outdata, p, *len);
 		/* pad (with 0's) asn1 blob to 8 byte boundary */
 		if (*padlen > 0) {
 			memset(p, 0, (size_t)*padlen);
+			OSSL_BUFFER_DEBUG(p,*padlen,"padlen");
 			BIO_write(outdata, p, *padlen);
 		}
 	} else if (type == FILE_TYPE_MSI) {
@@ -6390,13 +6393,13 @@ int main(int argc, char **argv)
 		DO_EXIT_0("Append signature to outfile failed\n");
 
 skip_signing:
-	OSSL_BUFFER_DEBUG(outdata,len,"outdata padlen[%d]",padlen);
 	update_data_size(type, cmd, &header, padlen, len, outdata);
 
 	if (type == FILE_TYPE_MSI) {
 		BIO_free_all(outdata);
 		outdata = NULL;
 	} else {
+		OSSL_DEBUG("FREE hash");
 		BIO_free_all(hash);
 		hash = outdata = NULL;
 	}
