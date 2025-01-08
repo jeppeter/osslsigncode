@@ -4642,6 +4642,9 @@ static PKCS7 *create_new_signature(file_type_t type,
 		if (si == NULL){
 			return NULL; /* FAILED */
 		}
+		if (cparams->cert) {
+			DEBUG_X509(cparams->cert,"cert info");
+		}
 		DEBUG_PKCS7_SIGNER_INFO(si,"add cert");
 		DEBUG_I2D_PKCS7(sig,"sig add cert");
 	} else {
@@ -6368,6 +6371,8 @@ int main(int argc, char **argv)
 	}
 
 	DEBUG_I2D_PKCS7(sig,"before timestamp authenticate");
+
+	OSSL_DEBUG("options.addBlob %d options.nturl %d  options.ntsurl %d",options.addBlob,options.nturl, options.ntsurl);
 
 #ifdef ENABLE_CURL
 	/* add counter-signature/timestamp */
