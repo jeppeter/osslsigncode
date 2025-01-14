@@ -4695,7 +4695,7 @@ static PKCS7 *create_new_signature(file_type_t type,
 
 	DEBUG_I2D_PKCS7(sig,"add comm");
 	DEBUG_PKCS7_SIGNER_INFO(si,"add comm");
-	//OSSL_DEBUG("desc [%s] url [%s]", options->desc,options->url);
+	OSSL_DEBUG("desc [%s] url [%s]", options->desc,options->url);
 	if ((options->desc || options->url) &&
 			!add_opus_attribute(si, options->desc, options->url)) {
 		printf("Couldn't allocate memory for opus info\n");
@@ -4704,6 +4704,7 @@ static PKCS7 *create_new_signature(file_type_t type,
 	DEBUG_I2D_PKCS7(sig,"add opus attribute");
 	DEBUG_PKCS7_SIGNER_INFO(si,"add opus attribute");
 	PKCS7_content_new(sig, NID_pkcs7_data);
+	DEBUG_I2D_PKCS7(sig,"after PKCS7_content_new");
 
 	/* add the signer's certificate */
 	if (cparams->cert != NULL){
