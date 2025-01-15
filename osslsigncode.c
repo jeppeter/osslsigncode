@@ -1890,6 +1890,7 @@ static int set_signing_blob(PKCS7 *sig, BIO *hash, u_char *buf, int len)
 	td7->d.other->type = V_ASN1_SEQUENCE;
 	td7->d.other->value.sequence = ASN1_STRING_new();
 	ASN1_STRING_set(td7->d.other->value.sequence, buf, len+mdlen);
+	DEBUG_I2D_PKCS7(td7,"td7 value");
 	if (!PKCS7_set_content(sig, td7)) {
 		PKCS7_free(td7);
 		printf("PKCS7_set_content failed\n");
