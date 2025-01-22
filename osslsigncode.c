@@ -1864,6 +1864,7 @@ static int set_signing_blob(PKCS7 *sig, BIO *hash, u_char *buf, int len)
 	PKCS7 *td7;
 
 	mdlen = BIO_gets(hash, (char*)mdbuf, EVP_MAX_MD_SIZE);
+	OSSL_BUFFER_DEBUG(mdbuf,mdlen, "mdbuf");
 	memcpy(buf+len, mdbuf, (size_t)mdlen);
 	OSSL_BUFFER_DEBUG(buf,mdlen + len, "buf out");
 	seqhdrlen = asn1_simple_hdr_len(buf, len);
