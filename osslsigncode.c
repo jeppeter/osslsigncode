@@ -1938,10 +1938,12 @@ static int set_indirect_data_blob(PKCS7 *sig, BIO *hash, file_type_t type,
 	int len = 0;
 	u_char *buf = OPENSSL_malloc(SIZE_64K);
 
+	DEBUG_I2D_PKCS7(sig,"no get_indirect_data_blob");
 	if (!get_indirect_data_blob(&p, &len, options, header, type, indata))
 		return 0; /* FAILED */
 	memcpy(buf, p, (size_t)len);
 	OPENSSL_free(p);
+	DEBUG_I2D_PKCS7(sig,"before sig with hash");
 	if (!set_signing_blob(sig, hash, buf, len)) {
 		OPENSSL_free(buf);
 		return 0; /* FAILED */
@@ -4674,7 +4676,7 @@ static PKCS7 *create_new_signature(file_type_t type,
 	} else {
 		obj = OBJ_nid2obj(NID_pkcs9_contentType);
 		if (obj != NULL) {
-			OBJ_obj2txt(objtxt,32,obj,0);
+			OBJ_obj2txt(objtxt,32,obj,1);
 			OSSL_DEBUG("add [%s] SPC_INDIRECT_DATA_OBJID[%s]", objtxt,SPC_INDIRECT_DATA_OBJID);
 			ASN1_OBJECT_free(obj);
 		}
