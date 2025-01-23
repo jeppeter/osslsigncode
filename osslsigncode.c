@@ -5212,6 +5212,7 @@ static int read_pkcs12file(GLOBAL_OPTIONS *options, CRYPTO_PARAMS *cparams)
 		PKCS12_free(p12);
 		goto out; /* FAILED */
 	}
+	OSSL_DEBUG("load pkey from pkcs12 [%s]", options->pkcs12file);
 	PKCS12_free(p12);
 	ret = 1; /* OK */
 out:
@@ -5329,6 +5330,7 @@ static int read_keyfile(GLOBAL_OPTIONS *options, CRYPTO_PARAMS *cparams)
 		printf("Failed to read private key file: %s\n", options->keyfile);
 		return 0; /* FAILED */
 	}
+	OSSL_DEBUG("load pkey [%s] keyfile", options->keyfile);
 	if (((cparams->pkey = d2i_PrivateKey_bio(btmp, NULL)) == NULL &&
 			(BIO_seek(btmp, 0) == 0) &&
 			(cparams->pkey = PEM_read_bio_PrivateKey(btmp, NULL, NULL, options->pass ? options->pass : NULL)) == NULL &&
@@ -5385,6 +5387,7 @@ static int read_pvk_key(GLOBAL_OPTIONS *options, CRYPTO_PARAMS *cparams)
 		printf("Failed to read private key file: %s\n", options->pvkfile);
 		return 0; /* FAILED */
 	}
+	OSSL_DEBUG("load pkey pvkfile [%s]", options->pvkfile);
 	cparams->pkey = b2i_PVK_bio(btmp, NULL, options->pass ? options->pass : NULL);
 	if (!cparams->pkey && options->askpass) {
 		(void)BIO_seek(btmp, 0);
@@ -5471,6 +5474,7 @@ static int read_token(GLOBAL_OPTIONS *options, ENGINE *engine, CRYPTO_PARAMS *cp
 			cparams->cert = parms.cert;
 	}
 
+	OSSL_DEBUG("load pkey keyfile [%s]",options->keyfile);
 	cparams->pkey = ENGINE_load_private_key(engine, options->keyfile, NULL, NULL);
 	/* Free the functional reference from ENGINE_init */
 	ENGINE_finish(engine);
