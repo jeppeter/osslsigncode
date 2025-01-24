@@ -1,5 +1,6 @@
 #!/bin/sh
 
+set -x
 # To the extent possible under law, Viktor Szakats (vsz.me)
 # has waived all copyright and related or neighboring rights to this
 # script.
@@ -94,7 +95,8 @@ else
   # TODO:
   #   https://github.com/openssl/openssl/pull/9223
   #     -pkeyopt ecdsa_nonce_type:deterministic
-  cryptopt='-algorithm EC  -pkeyopt ec_paramgen_curve:secp384r1 -pkeyopt ec_param_enc:named_curve'
+  #cryptopt='-algorithm EC  -pkeyopt ec_paramgen_curve:secp384r1 -pkeyopt ec_param_enc:named_curve'
+  cryptopt='-algorithm EC  -pkeyopt ec_paramgen_curve:prime192v3 -pkeyopt ec_param_enc:named_curve'
 fi
 
 # "$(pwgen --secure 40 1)"
